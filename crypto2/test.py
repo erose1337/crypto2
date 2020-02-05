@@ -1,9 +1,9 @@
 if __name__ == "__main__":
     import encryption
-    import function
+    import core
     import kem
     import signature
-    for module in (encryption, function, kem, signature):
+    for module in (encryption, core, kem, signature):
         for name in dir(module):
             if name[:4] == "test":
                 test = getattr(module, name)

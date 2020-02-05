@@ -2,9 +2,7 @@ import ast
 
 import encryption
 from parameters import PARAMETERS
-from utilities import random_integer
-from function import decompress
-from linearalgebra import add_vector, scale_vector
+from utilities import random_integer_mod_q
 
 def generate_private_key(parameters=PARAMETERS):
     return encryption.generate_secret_key(parameters)
@@ -24,16 +22,14 @@ def generate_keypair(parameters=PARAMETERS):
 
 def encapsulate_secret(public_key, parameters=PARAMETERS):
     q, r_size, n = parameters['q'], parameters["r_size"], parameters['n']
-    s = random_integer(r_size)
-    secret_vector = decompress(s, n, q)
-    output_seed = [0] * n
-    output = 0
+    scalar = secret = random_integer_mod_q(r_size, q)
+    output = ([0] * n, 0)
     for i, entry in enumerate(public_key):
-        scalar = secret_vector[i]
-        key_vector, key_scalar = entry
-        output_seed = add_vector(output_seed, scale_vector(key_vector, scalar, q), q)
-        output = (output + (key_scalar * scalar)) % q
-    return secret_vector[0], (output_seed, output)
+        scaled_entry = encryption.scale_ciphertext(entry, scalar, parameters)
+        output = encryption.add_scaled_ciphertexts(output, scaled_entry,
+                                                   parameters)
+        scalar = (scalar * secret) % q
+    return secret, output
 
 def recover_secret(private_key, encapsulated_secret, parameters=PARAMETERS):
     return encryption.decrypt(private_key, encapsulated_secret, parameters)
@@ -82,7 +78,7 @@ def test_kem():
         public, private = generate_keypair()
         secret, encapsulated = encapsulate_secret(public)
         _secret = recover_secret(private, encapsulated)
-        assert _secret == secret
+        assert _secret == secret, (_secret, secret)
 
     print("Testing performance of KEM...")
     from timeit import default_timer
@@ -99,15 +95,25 @@ def test_kem():
     recover_time = after - before
 
     q_size = PARAMETERS["security_level"]; n = PARAMETERS['n']
-    pub_size = q_size * n
-    priv_size = q_size + (q_size * n)
-    comp_size = q_size + q_size
-    print("Time taken to encapsulate {} keys: {} seconds".format(test_size, encaps_time))
-    print("Taken taken to recover    {} keys: {} seconds".format(test_size, recover_time))
-    print("Public key size : {} bits ({} bytes)".format(pub_size, pub_size / 8))
-    print("Private key size: {} bits ({} bytes) (uncompressed)".format(priv_size, priv_size / 8))
-    print("Private key size: {} bits ({} bytes) (compressed)".format(comp_size, comp_size / 8))
-    print("Cryptogram size : {} bits ({} bytes)".format(q_size, q_size / 8))
+    pub_entry_size = q_size + q_size             #      compressed seed + scalar
+    pub_size = pub_entry_size * n
+    priv_size = q_size + (q_size * n)            # scalar + uncompressed prf key
+    comp_size = q_size + q_size                  #   scalar + compressed prf key
+    cryptogram_size = (q_size * n) + q_size      #    uncompressed seed + scalar
+    messages = ["Time taken to encapsulate {} keys: {} seconds",
+                "Taken taken to recover    {} keys: {} seconds",
+                "Public key size : {} bits ({} bytes)",
+                "Private key size: {} bits ({} bytes) (uncompressed)",
+                "Private key size: {} bits ({} bytes) (compressed)",
+                "Cryptogram size : {} bits ({} bytes)"]
+    inserts = [(test_size, encaps_time),
+               (test_size, recover_time),
+               (pub_size, pub_size / 8),
+               (priv_size, priv_size / 8),
+               (comp_size, comp_size / 8),
+               (cryptogram_size, cryptogram_size / 8)]
+    for message, insert in zip(messages, inserts):
+        print(message.format(*insert))
 
 if __name__ == "__main__":
     test_serialize_deserialize()

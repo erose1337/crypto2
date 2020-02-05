@@ -14,8 +14,35 @@ def slide(iterable, x=16):
 def random_integer(size_in_bytes):
     return bytes_to_integer(bytearray(random_bytes(size_in_bytes)))
 
-def random_vector(n, q, r_size):
-    return [random_integer(r_size) % q for i in range(n)]
+def random_integer_mod_q(size_in_bytes, q):
+    return random_integer(size_in_bytes) % q
+
+def random_coefficient(r_size, s_max):
+    return random_integer_mod_q(r_size, s_max)
+
+def random_vector(parameters):
+    r_size = parameters["r_size"]; s_max = parameters["s_max"]
+    return [random_coefficient(parameters) for i in range(parameters['n'])]
+
+def compress(vector, q):
+    degree = len(vector)
+    elements = set(vector)
+    assert len(elements) == len(vector), (len(elements), len(vector))
+    for scalar in vector:
+        for k in range(1, degree + 1):
+            if pow(scalar, k, q) not in elements:
+                break
+        else:
+            break
+    else:
+        raise ValueError("No relation found")
+    return scalar
+
+def decompress(scalar, n, q):
+    return [pow(scalar, i, q) for i in range(1, n + 1)]
+
+def compressible_vector(r_size, n, q):
+    return decompress(random_integer(r_size), n, q)
 
 def _hmac_rng(key, seed, hash_function="SHA256"):
     """ Generates psuedorandom bytes via HMAC. Implementation could be improved to

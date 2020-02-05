@@ -1,4 +1,4 @@
-from utilities import random_vector, is_prime
+from utilities import is_prime, compressible_vector
 
 __all__ = ['Q', 'N', "R_SIZE", 'G', "PARAMETERS"]
 
@@ -17,18 +17,23 @@ def generate_q(q_size):
     return q_start + offset
 
 def generate_parameters(security_level):
-    print("Warning: parameterization fixed at 128-bit")
-    print("Warning: secure parameters not established")
-    # TODO: generate parameters for the specified security level
-    assert security_level == 128
-    q = generate_q(security_level)
-    q_size = 128
-    n = 16
-    r_size = 64 # in bytes; larger than q to reduce bias
-    G = random_vector(n, q, r_size)
-    hash_algorithm = "SHA256"
-    parameters = {'q' : q, 'n' : n, "r_size" : r_size, 'G' : G,
-                  "security_level" : 128, "hash_algorithm" : hash_algorithm}
-    return q, n, r_size, G, parameters
+    print("Warning: secure parameterization for 'n' not established")
 
-Q, N, R_SIZE, G, PARAMETERS = generate_parameters(128)
+    # picks the largest n that will allow a signature to fit in 1 packet
+    budget = 1500 * 8        # MTU, amount of space available in a single packet
+    q_size = (security_level * 2)
+    n = int(float(budget / 2) / q_size)
+    q = generate_q(q_size)
+    print("Using log2(q)=2^{}, n={} for k={}".format(q_size, n, security_level))
+
+    r_size = q_size + security_level    # in bytes; larger than q to reduce bias
+    s_max = 2 ** security_level
+    hash_algorithm = "SHA512"
+    G = compressible_vector(r_size, n, q)
+    g = G[0]
+    parameters = {"security_level" : 128, 'q' : q, 'n' : n, 'G' : G, 'g' : g,
+                  "r_size" : r_size, "s_max" : s_max, "q_size" : q_size,
+                  "hash_algorithm" : hash_algorithm}
+    return q, n, r_size, s_max, G, parameters
+
+Q, N, R_SIZE, S_MAX, G, PARAMETERS = generate_parameters(128)
